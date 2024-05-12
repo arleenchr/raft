@@ -3,13 +3,15 @@
 """
 
 class KVStore: 
-    # Attribute
 
-    """
-        Data is a dictionary that has <key>:<value> format with <value> is a string.
-        Data can be added, updated, and deleted only from public method.
-    """
-    __data = {}
+    def __init__(self) -> None: 
+        # Attribute
+        
+        """
+            Data is a dictionary that has <key>:<value> format with <value> is a string.
+            Data can be added, updated, and deleted only from public method.
+        """
+        self.__data = {}
 
     # Method
     def ping(self) -> str:

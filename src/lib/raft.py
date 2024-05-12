@@ -9,7 +9,7 @@ from typing        import Any, List
 from enum          import Enum
 
 # In-Reposiroty Library
-from struct.address       import Address
+from lib.struct.address       import Address
 
 
 
@@ -38,8 +38,6 @@ class RaftNode:
             self.__initialize_as_leader()
         else:
             self.__try_to_apply_membership(contact_addr)
-
-
 
     # Internal Raft Node methods
     def __print_log(self, text: str):
