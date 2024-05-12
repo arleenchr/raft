@@ -1,5 +1,6 @@
 # Out-Repository Library
 import sys
+import os
 from xmlrpc.server      import SimpleXMLRPCServer
 
 # In-Repository Library
@@ -10,10 +11,15 @@ from lib.app            import KVStore
 
 def start_serving(addr: Address, contact_node_addr: Address) -> None:
     print(f"Starting Raft Server at {addr.ip}:{addr.port}")
-    with SimpleXMLRPCServer((addr.ip, addr.port)) as server:
-        server.register_introspection_functions()
-        server.register_instance(RaftNode(KVStore(), addr, contact_node_addr))
+    server =  SimpleXMLRPCServer((addr.ip, addr.port)) 
+    # server.register_introspection_functions()
+    server.register_instance(RaftNode(KVStore(), addr, contact_node_addr))
+    try:
         server.serve_forever()
+    except KeyboardInterrupt:
+        print(f"Kill Raft Server at {addr.ip}:{addr.port}")
+        os._exit(42)
+        
 
 
 
