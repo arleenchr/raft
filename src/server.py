@@ -1,7 +1,11 @@
-from address       import Address
-from raft          import RaftNode
-from xmlrpc.server import SimpleXMLRPCServer
-from app           import KVStore
+# Out-Repository Library
+import sys
+from xmlrpc.server      import SimpleXMLRPCServer
+
+# In-Repository Library
+from lib.struct.address import Address
+from lib.raft           import RaftNode
+from lib.app            import KVStore
 
 
 
