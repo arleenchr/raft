@@ -99,5 +99,20 @@ class RaftNode:
     # Client RPCs
     def execute(self, json_request: str) -> "json":
         request = json.loads(json_request)
+
         # TODO : Implement execute
-        return json.dumps(request)
+        service = request.get("service")
+        params = request.get("params")
+
+        if service == "ping":
+            result = self.app.ping()
+        elif service == "get":
+            result = self.app.get(params)
+        elif service == "set":
+            key = params.get("key")
+            value = params.get("value")
+            result = self.app.set(key, value)
+        else:
+            result = "Invalid service"
+
+        return json.dumps(result)

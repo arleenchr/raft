@@ -22,7 +22,7 @@ class KVStore:
             - str: "PONG".
         """
         # TODO: Implement ping
-        pass 
+        return "PONG"
 
     def get(self, key : str) -> str:
         """
@@ -35,7 +35,7 @@ class KVStore:
             - str: value from specified key, "" if key not exist.
         """
         # TODO: Implement get
-        pass 
+        return self.__data.get(key, "")
     
     def set(self, key : str, value:str) -> str:
         """
@@ -49,7 +49,8 @@ class KVStore:
             - str: "OK".
         """
         # TODO: Implement set
-        pass 
+        self.__data[key] = value
+        return "OK"
 
     def strln(self, key : str) -> int:
         """
