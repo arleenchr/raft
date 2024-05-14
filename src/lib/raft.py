@@ -51,14 +51,38 @@ class RaftNode:
             "cluster_leader_addr": self.address
         }
         # TODO : Inform to all node this is new leader
+        for peer_addr in self.cluster_addr_list:
+            if peer_addr != self.address:
+                try:
+                    self.__send_request(request, "inform_new_leader", peer_addr)
+                except Exception as e:
+                    self.__print_log(f"Failed to inform {peer_addr} about new leader: {e}")
+        
         self.heartbeat_thread = Thread(target=asyncio.run,args=[self.__leader_heartbeat()])
         self.heartbeat_thread.start()
 
+    async def __send_heartbeat(self, peer_addr: Address):
+        # Construct the heartbeat message
+        message = {
+            'term': self.election_term,
+            'leader_id': self.address,
+            'commit_index': len(self.log)  # assuming commit_index is the length of the log
+        }
+        self.__print_log(f"[Leader] Sending heartbeat to {peer_addr}")
+        try:
+            response = self.__send_request(message, "heartbeat", peer_addr)
+            if response.get("heartbeat_response") == "ack":
+                self.__print_log(f"[Leader] Heartbeat acknowledged by {peer_addr}")
+        except Exception as e:
+            self.__print_log(f"[Leader] Failed to send heartbeat to {peer_addr}: {e}")
+
     async def __leader_heartbeat(self):
-        # TODO : Send periodic heartbeat
-        while True:
+        # DONE : Send periodic heartbeat
+        while self.type == RaftNode.NodeType.LEADER:
             self.__print_log("[Leader] Sending heartbeat...")
-            pass
+            send_tasks = [self.__send_heartbeat(peer_addr) for peer_addr in self.cluster_addr_list if peer_addr != self.address]
+            await asyncio.gather(*send_tasks)
+            # pass
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
 
     def __try_to_apply_membership(self, contact_addr: Address):
