@@ -136,6 +136,16 @@ class RaftNode:
             key = params.get("key")
             value = params.get("value")
             result = self.app.set(key, value)
+        elif service == "strln":
+            key = params.get("key")
+            result = self.app.strln(key)
+        elif service == "delete":
+            key = params.get("key")
+            result = self.app.delete(key)
+        elif service == "append":
+            key = params.get("key")
+            value = params.get("value")
+            result = self.app.append(key,value)
         else:
             result = "Invalid service"
 
