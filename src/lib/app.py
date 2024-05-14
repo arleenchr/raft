@@ -63,7 +63,8 @@ class KVStore:
             - int: value length of specified key, 0 if key is not exists.
         """
         # TODO: Implement strln 
-        pass 
+        string = self.get(key)
+        return len(string)
 
     def delete(self, key : str) -> str:
         """
@@ -76,7 +77,7 @@ class KVStore:
             - str: value from specified key, "" if key not exist.
         """
         # TODO: Implement delete
-        pass
+        return self.__data.pop(key,"")
 
     def append(self, key : str, value:str) -> str:
         """
@@ -89,5 +90,10 @@ class KVStore:
             Returns:
             - str: "OK".
         """
+        string = self.get(key)
         # TODO: Implement append
-        pass 
+        if (string != ""):
+            self.__data[key] = f'{self.__data[key]}{value}'
+        else:
+            self.__data[key] = "" + value
+        return "OK"
