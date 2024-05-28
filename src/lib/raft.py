@@ -17,8 +17,8 @@ from lib.struct.address       import Address
 
 class RaftNode:
     HEARTBEAT_INTERVAL   = 1
-    ELECTION_TIMEOUT_MIN = 2
-    ELECTION_TIMEOUT_MAX = 3
+    ELECTION_TIMEOUT_MIN = 3
+    ELECTION_TIMEOUT_MAX = 4
     RPC_TIMEOUT          = 0.5
 
     class NodeType(Enum):
@@ -82,6 +82,7 @@ class RaftNode:
 
         leader_request_thread = threading.Thread(target=self.__leader_request_vote, name="t1")
         leader_request_thread.start()
+        leader_request_thread.join()
 
     # Request vote to be a leader as node become a candidate node. Internode RPC
 
@@ -136,20 +137,21 @@ class RaftNode:
     def request_vote(self, json_request: str):
 
         print("KEPANGGIL VOTE")
-        print()
         request = json.loads(json_request)
         response = {
             "term": self.current_term,
             "vote_granted": False
         }
 
-        print("term", int(request["term"]), "curr term", self.current_term)
         if ( int(request["term"]) < self.current_term):
             return json.dumps(response)
         
         voted_for_condition = self.voted_for is None or self.voted_for == request["candidate_addr"]
-        log_condition = (request["last_log_term"] > self.log[len(self.log)-1][0]) or ((
-            request["last_log_term"] == self.log[len(self.log)-1][0]) and (request["last_log_index"] >= (len(self.log)-1)))
+        
+        curr_last_log_index = -1 if (len(self.log)==0) else len(self.log)-1
+        curr_last_log_term = -1 if (len(self.log)==0) else self.log[len(self.log)-1][0]
+        log_condition = ((int(request["last_log_term"]) > curr_last_log_term) or ((
+            int(request["last_log_term"]) == curr_last_log_term) and (int(request["last_log_index"]) >= curr_last_log_index)))
             
         if voted_for_condition and log_condition:
             self.voted_for = request["candidate_addr"]
@@ -188,6 +190,7 @@ class RaftNode:
         self.cluster_addr_list = temp_cluster_addr_list
 
         print("New member informed")
+        return json.dumps(request)
 
     
     def inform_new_leader(self, json_request):
@@ -272,6 +275,15 @@ class RaftNode:
         self.cluster_addr_list = temp_cluster_addr_list
         self.cluster_leader_addr = redirected_addr
 
+    def __send_new_member_information(self, address: Address):
+        request = {
+            "cluster_addr_list": self.cluster_addr_list
+        }
+        for addr in self.cluster_addr_list:
+            if (addr != self.address and addr != address):
+                self.__send_request(request, "inform_new_member", addr)
+                self.__print_log(f"Inform new member to {addr}")
+
     # Internode RPC 
     def apply_membership(self, address : Address):
         response = {
@@ -284,22 +296,17 @@ class RaftNode:
         # Proses apply membership jika node yang diminta adalah leader node
         if (self.type == RaftNode.NodeType.LEADER):
             address = json.loads(address)
-            self.cluster_addr_list.append(Address(address["ip"], address["port"]))
+            address = Address(address["ip"], address["port"])
+            self.cluster_addr_list.append(address)
             self.__print_log(f"Adding {address} to cluster...")
             response["status"] = "success"
             response["log"] = self.log
             response["cluster_addr_list"] = self.cluster_addr_list
             # Redirected 
             print("sini")
-            request = {
-                "cluster_addr_list": self.cluster_addr_list
-            }
-            # print(self.cluster_addr_list)
-            # for addr in self.cluster_addr_list:
-            #     if (addr != self.address and addr != address):
-            #         self.__send_request(request, "inform_new_member", addr)
-            #     print("addr", addr)
-            # print("Pangil oi",response)
+            
+            new_member_broadcaster_thread = threading.Thread(target=self.__send_new_member_information, kwargs={'address' : address}, name="t2")
+            new_member_broadcaster_thread.start()
         return json.dumps(response)
 
     # Client RPCs
