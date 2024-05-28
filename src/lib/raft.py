@@ -3,6 +3,8 @@ import asyncio
 import socket
 import time
 import json
+import threading
+import random
 from threading     import Thread
 from xmlrpc.client import ServerProxy
 from typing        import Any, List
@@ -28,26 +30,140 @@ class RaftNode:
         socket.setdefaulttimeout(RaftNode.RPC_TIMEOUT)
         self.address:             Address           = addr
         self.type:                RaftNode.NodeType = RaftNode.NodeType.FOLLOWER
-        self.log:                 List[str, str]    = []
+        self.log:                 List[int, str]    = []
         self.app:                 Any               = application
-        self.election_term:       int               = 0
+        self.current_term:        int               = 0
+        self.voted_for:           Address           = None
         self.cluster_addr_list:   List[Address]     = []
         self.cluster_leader_addr: Address           = None
+        self.election_timer                         = None
         if contact_addr is None:
             self.cluster_addr_list.append(self.address)
             self.__initialize_as_leader()
+            # self.__start_election_process()
         else:
             self.__try_to_apply_membership(contact_addr)
+            self.reset_election_timer()
 
-    # Internal Raft Node methods
+    ## IO
     def __print_log(self, text: str):
         print(f"[{self.address}] [{time.strftime('%H:%M:%S')}] {text}")
 
+    def __send_request(self, request: Any, rpc_name: str, addr: Address) -> "json":
+        # Warning : This method is blocking
+        node         = ServerProxy(f"http://{addr.ip}:{addr.port}")
+        json_request = json.dumps(request)
+        rpc_function = getattr(node, rpc_name)
+        response     = json.loads(rpc_function(json_request))
+        return response
+
+    ## Leadership
+
+    
+    def reset_election_timer(self):
+        if self.election_timer:
+            self.election_timer.cancel()
+        timeout = random.random() + RaftNode.ELECTION_TIMEOUT_MIN
+        self.__print_log("reset timeout: " + str(timeout))
+        self.election_timer = threading.Timer(timeout,
+                                               self.start_election)
+        self.election_timer.start()
+
+    def stop_election_timer(self):
+        if self.election_timer:
+            self.election_timer.cancel()
+
+    def __start_election_process(self):
+        self.__print_log("Starting election process...")
+        self.start_election()
+
+    def start_election(self):
+        self.stop_election_timer()
+
+        leader_request_thread = threading.Thread(target=self.__leader_request_vote, name="t1")
+        leader_request_thread.start()
+
+    # Request vote to be a leader as node become a candidate node. Internode RPC
+
+    def __leader_request_vote(self):
+        self.__print_log("[CANDIDATE] start to request vote")
+        self.type = RaftNode.NodeType.CANDIDATE
+
+        # Increment current term
+        self.current_term += 1
+
+        # Vote for self
+        self.voted_for = self.address
+
+        # Reset election timer
+        self.reset_election_timer()
+
+        # Send Request Vote RPCs to all other servers
+        num_vote = 1
+        abstain_node = 0
+
+        last_log_index = -1 if (len(self.log)==0) else len(self.log)-1
+        last_log_term = -1 if (len(self.log)==0) else self.log[len(self.log)-1][0]
+
+        request = {
+            "term":             self.current_term,
+            "candidate_addr":   self.address,
+            "last_log_index":   last_log_index,
+            "last_log_term":    last_log_term,
+        }
+
+        for follower_addr in self.cluster_addr_list:
+            print(follower_addr, self.address)
+            if follower_addr != self.address:
+                print("Minta suara ", follower_addr)
+                try:
+                    response = json.loads(self.__send_request(request, "request_vote" , follower_addr))
+                    if (response["vote_granted"]):
+                        num_vote+=1
+                except:
+                    print("TImeout", follower_addr)
+                    abstain_node += 1
+                    pass
+        
+        if (num_vote > ((len(self.cluster_addr_list) - abstain_node)/2)):
+            print("num vote: ", num_vote)
+            print("quorum: ", ((len(self.cluster_addr_list) - abstain_node)/2) )
+            self.__initialize_as_leader()
+        else:
+            self.type = RaftNode.NodeType.FOLLOWER
+
+        
+    def request_vote(self, json_request: str):
+
+        print("KEPANGGIL VOTE")
+        print()
+        request = json.loads(json_request)
+        response = {
+            "term": self.current_term,
+            "vote_granted": False
+        }
+
+        print("term", int(request["term"]), "curr term", self.current_term)
+        if ( int(request["term"]) < self.current_term):
+            return json.dumps(response)
+        
+        voted_for_condition = self.voted_for is None or self.voted_for == request["candidate_addr"]
+        log_condition = (request["last_log_term"] > self.log[len(self.log)-1][0]) or ((
+            request["last_log_term"] == self.log[len(self.log)-1][0]) and (request["last_log_index"] >= (len(self.log)-1)))
+            
+        if voted_for_condition and log_condition:
+            self.voted_for = request["candidate_addr"]
+            response["vote_granted"] = True
+        self.__print_log(f"Grant vote {self.voted_for}")
+        return json.dumps(response)
+
+    # Initialize as leader, if candidate get majority vote from other node
     def __initialize_as_leader(self):
         self.__print_log("Initialize as leader node...")
         self.cluster_leader_addr = self.address
         self.type                = RaftNode.NodeType.LEADER
         request = {
+            "term": self.current_term,
             "cluster_leader_addr": self.address
         }
         # TODO : Inform to all node this is new leader
@@ -61,10 +177,40 @@ class RaftNode:
         self.heartbeat_thread = Thread(target=asyncio.run,args=[self.__leader_heartbeat()])
         self.heartbeat_thread.start()
 
+    
+    def inform_new_member(self, json_request):
+        request = json.loads(json_request)
+        
+        temp_cluster_addr_list = []
+        for address in request["cluster_addr_list"]:
+            temp_cluster_addr_list.append(Address(address["ip"], address["port"]))
+            
+        self.cluster_addr_list = temp_cluster_addr_list
+
+        print("New member informed")
+
+    
+    def inform_new_leader(self, json_request):
+        request = json.loads(json_request)
+        self.current_term = request["term"]
+        self.cluster_leader_addr = request["cluster_leader_addr"]
+        self.type = RaftNode.NodeType.FOLLOWER
+        self.voted_for = None
+        self.reset_election_timer()
+        self.__print_log(f"New leader informed: {self.cluster_leader_addr}")
+        response = {
+            "status": "success",
+            "address": self.address
+        }
+        return json.dumps(response)
+
+
+
+    ## Heartbeat
     async def __send_heartbeat(self, peer_addr: Address):
         # Construct the heartbeat message
         message = {
-            'term': self.election_term,
+            'term': self.current_term,
             'leader_id': self.address,
             'commit_index': len(self.log)  # assuming commit_index is the length of the log
         }
@@ -84,7 +230,49 @@ class RaftNode:
             await asyncio.gather(*send_tasks)
             # pass
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
+
+     # Inter-node RPCs
+    def heartbeat(self, json_request: str) -> "json":
+        # TODO : Implement heartbeat
+        request = json.loads(json_request)
+        response = {
+            "heartbeat_response": "ack",
+            "address": self.address,
+        }
+
+        if request["term"] >= self.current_term:
+            self.current_term = request["term"]
+            self.cluster_leader_addr = request["leader_id"]
+            self.type = RaftNode.NodeType.FOLLOWER
+            self.voted_for = None
+            self.reset_election_timer()  # Reset the timer on receiving a heartbeat
+
+        return json.dumps(response)
     
+    ## Membership
+    def __try_to_apply_membership(self, contact_addr: Address):
+        redirected_addr = contact_addr
+        response = {
+            "status": "redirected",
+            "address": {
+                "ip":   contact_addr.ip,
+                "port": contact_addr.port,
+            }
+        }
+        while response["status"] != "success":
+            redirected_addr = Address(response["address"]["ip"], response["address"]["port"])
+            response        = self.__send_request(self.address, "apply_membership", redirected_addr)
+        
+        self.log                 = response["log"]
+        
+        temp_cluster_addr_list = []
+        for address in response["cluster_addr_list"]:
+            temp_cluster_addr_list.append(Address(address["ip"], address["port"]))
+    
+        self.cluster_addr_list = temp_cluster_addr_list
+        self.cluster_leader_addr = redirected_addr
+
+    # Internode RPC 
     def apply_membership(self, address : Address):
         response = {
             "status": "redirected",
@@ -101,43 +289,18 @@ class RaftNode:
             response["status"] = "success"
             response["log"] = self.log
             response["cluster_addr_list"] = self.cluster_addr_list
-            return json.dumps(response)
-        # Redirected 
-        return json.dumps(response)
-
-    def __try_to_apply_membership(self, contact_addr: Address):
-        redirected_addr = contact_addr
-        response = {
-            "status": "redirected",
-            "address": {
-                "ip":   contact_addr.ip,
-                "port": contact_addr.port,
+            # Redirected 
+            print("sini")
+            request = {
+                "cluster_addr_list": self.cluster_addr_list
             }
-        }
-        while response["status"] != "success":
-            redirected_addr = Address(response["address"]["ip"], response["address"]["port"])
-            response        = self.__send_request(self.address, "apply_membership", redirected_addr)
-        self.log                 = response["log"]
-        self.cluster_addr_list   = response["cluster_addr_list"]
-        self.cluster_leader_addr = redirected_addr
-
-    def __send_request(self, request: Any, rpc_name: str, addr: Address) -> "json":
-        # Warning : This method is blocking
-        node         = ServerProxy(f"http://{addr.ip}:{addr.port}")
-        json_request = json.dumps(request)
-        rpc_function = getattr(node, rpc_name)
-        response     = json.loads(rpc_function(json_request))
-        return response
-
-    # Inter-node RPCs
-    def heartbeat(self, json_request: str) -> "json":
-        # TODO : Implement heartbeat
-        response = {
-            "heartbeat_response": "ack",
-            "address":            self.address,
-        }
+            # print(self.cluster_addr_list)
+            # for addr in self.cluster_addr_list:
+            #     if (addr != self.address and addr != address):
+            #         self.__send_request(request, "inform_new_member", addr)
+            #     print("addr", addr)
+            # print("Pangil oi",response)
         return json.dumps(response)
-
 
     # Client RPCs
     def execute(self, json_request: str) -> "json":
