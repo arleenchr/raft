@@ -84,6 +84,26 @@ class RaftNode:
             await asyncio.gather(*send_tasks)
             # pass
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
+    
+    def apply_membership(self, address : Address):
+        response = {
+            "status": "redirected",
+            "address": {
+                "ip":   self.address.ip,
+                "port": self.address.port,
+            }
+        }
+        # Proses apply membership jika node yang diminta adalah leader node
+        if (self.type == RaftNode.NodeType.LEADER):
+            address = json.loads(address)
+            self.cluster_addr_list.append(Address(address["ip"], address["port"]))
+            self.__print_log(f"Adding {address} to cluster...")
+            response["status"] = "success"
+            response["log"] = self.log
+            response["cluster_addr_list"] = self.cluster_addr_list
+            return json.dumps(response)
+        # Redirected 
+        return json.dumps(response)
 
     def __try_to_apply_membership(self, contact_addr: Address):
         redirected_addr = contact_addr
@@ -107,7 +127,6 @@ class RaftNode:
         json_request = json.dumps(request)
         rpc_function = getattr(node, rpc_name)
         response     = json.loads(rpc_function(json_request))
-        self.__print_log(response)
         return response
 
     # Inter-node RPCs
