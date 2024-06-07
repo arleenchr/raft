@@ -158,6 +158,11 @@ class RaftNode:
         self.__print_log(f"Grant vote {self.voted_for}")
         return json.dumps(response)
 
+    def run_async_task(self, coro):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(coro)
+
     # Initialize as leader, if candidate get majority vote from other node
     def __initialize_as_leader(self):
         self.__print_log("Initialize as leader node...")
@@ -176,7 +181,7 @@ class RaftNode:
                     self.__print_log(f"Failed to inform {peer_addr} about new leader: {e}")
                 
         try:
-            self.heartbeat_thread = Thread(target=asyncio.run, args=[self.__leader_heartbeat()])
+            self.heartbeat_thread = Thread(target=self.run_async_task, args=[self.__leader_heartbeat()])
             self.heartbeat_thread.start()
         except Exception as e:
             self.__print_log(f"Failed to start heartbeat thread: {e}")

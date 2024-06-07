@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Raft</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  </head>
+  <body>
+    <nav class="navbar bg-body-tertiary">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">
+          Kraft
+        </a>
+      </div>
+    </nav>
+    <div class="container d-flex flex-column gap-3 mt-3 mb-3">
+      <h3>Raft Consensus</h3>
+      <h5>Client service</h5>
+      <div class="input-group flex-nowrap">
+        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="dropdownServiceButton">Service</button>
+        <ul class="dropdown-menu" aria-labelledby="dropdownServiceButton">
+          <li><a class="dropdown-item" href="#" data-service="ping">ping</a></li>
+          <li><a class="dropdown-item" href="#" data-service="get">get</a></li>
+          <li><a class="dropdown-item" href="#" data-service="set">set</a></li>
+          <li><a class="dropdown-item" href="#" data-service="strln">strln</a></li>
+          <li><a class="dropdown-item" href="#" data-service="del">del</a></li>
+          <li><a class="dropdown-item" href="#" data-service="append">append</a></li>
+        </ul>
+        <div id="parameterInputs" class="input-group"></div>
+      </div>
+      <div class="align-self-start d-flex flex-row align-items-center gap-2">
+        <p class="m-0">Send request to</p>
+        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="dropdownServerButton">Server</button>
+        <ul class="dropdown-menu" aria-labelledby="dropdownServerButton">
+          <li><a class="dropdown-item" href="#" data-server="localhost:8080">localhost:8080</a></li>
+        </ul>
+        <input class="btn btn-primary" type="submit" value="Send request" id="sendRequestButton" disabled>
+      </div>
+      <div></div>
+      <h5>Servers</h5>
+      <div class="container">
+        <div class="row row-cols-2">
+          <div class="col-md-6 bg-dark p-2 mb-2" style="height: 200px; overflow-y: scroll; overflow-x: auto;">
+              <pre class="text-white text-wrap m-0">[localhost:8060] [23:09:49] [Leader] Failed to send heartbeat to localhost:8050: timed out</pre>
+              <pre class="text-white text-wrap m-0">[localhost:8060] [23:09:49] [Leader] Sending heartbeat to localhost:8090</pre>
+              <pre class="text-white text-wrap m-0">[localhost:8060] [23:09:49] [Leader] Sending heartbeat to localhost:8080</pre>
+              <pre class="text-white text-wrap m-0">[localhost:8060] [23:09:49] [Leader] Sending heartbeat to localhost:8070</pre>
+              <pre class="text-white text-wrap m-0">[localhost:8060] [23:09:49] [Leader] Sending heartbeat to localhost:8060</pre>
+              <pre class="text-white text-wrap m-0">[localhost:8060] [23:09:49] [Leader] Sending heartbeat to localhost:8040</pre>
+              <pre class="text-white text-wrap m-0">[localhost:8060] [23:09:50] [Leader] Failed to send heartbeat to localhost:8040: timed out</pre>
+              <pre class="text-white text-wrap m-0">[localhost:8060] [23:09:52] reset timeout: 5.116161381509787</pre>
+          </div>
+          <div class="col-md-6 bg-dark p-2 mb-2" style="height: 200px; overflow-y: scroll; overflow-x: auto;">
+              <pre class="text-white text-wrap m-0">[localhost:8080] [23:09:49] [Leader] Sending heartbeat to localhost:8040</pre>
+          </div>
+          <div class="col-md-6 bg-dark p-2 mb-2" style="height: 200px; overflow-y: scroll; overflow-x: auto;">
+              <pre class="text-white text-wrap m-0">[localhost:8080] [23:09:49] [Leader] Sending heartbeat to localhost:8040</pre>
+          </div>
+          <div class="col-md-6 bg-dark p-2 mb-2" style="height: 200px; overflow-y: scroll; overflow-x: auto;">
+              <pre class="text-white text-wrap m-0">[localhost:8080] [23:09:49] [Leader] Sending heartbeat to localhost:8040</pre>
+          </div>
+          <div class="col-md-6 bg-dark p-2 mb-2" style="height: 200px; overflow-y: scroll; overflow-x: auto;">
+              <pre class="text-white text-wrap m-0">[localhost:8080] [23:09:49] [Leader] Sending heartbeat to localhost:8040</pre>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+
+      
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="scripts/input.js"></script>
+  </body>
+</html>
