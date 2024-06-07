@@ -37,6 +37,7 @@ class RaftNode:
         self.cluster_addr_list:   List[Address]     = []
         self.cluster_leader_addr: Address           = None
         self.election_timer                         = None
+        self.commit_index:        int               = -1
         if contact_addr is None:
             self.cluster_addr_list.append(self.address)
             self.__initialize_as_leader()
@@ -104,7 +105,7 @@ class RaftNode:
         abstain_node = 0
 
         last_log_index = -1 if (len(self.log)==0) else len(self.log)-1
-        last_log_term = -1 if (len(self.log)==0) else self.log[len(self.log)-1][0]
+        last_log_term = -1 if (len(self.log)==0) else int(self.log[len(self.log)-1]["term"])
 
         request = {
             "term":             self.current_term,
@@ -122,7 +123,7 @@ class RaftNode:
                     if (response["vote_granted"]):
                         num_vote+=1
                 except:
-                    print("TImeout", follower_addr)
+                    print("Timeout", follower_addr)
                     abstain_node += 1
                     pass
         
@@ -244,8 +245,8 @@ class RaftNode:
         }
 
         if request["term"] >= self.current_term:
-            self.current_term = request["term"]
-            self.cluster_leader_addr = request["leader_id"]
+            self.current_term = int(request["term"])
+            self.cluster_leader_addr = Address(request["leader_id"]["ip"],request["leader_id"]["port"] )
             self.type = RaftNode.NodeType.FOLLOWER
             self.voted_for = None
             self.reset_election_timer()  # Reset the timer on receiving a heartbeat
@@ -254,7 +255,7 @@ class RaftNode:
     
     ## Membership
     def __try_to_apply_membership(self, contact_addr: Address):
-        redirected_addr = contact_addr
+        redirected_addr = Address(contact_addr.ip, contact_addr.port)
         response = {
             "status": "redirected",
             "address": {
@@ -310,12 +311,11 @@ class RaftNode:
         return json.dumps(response)
 
     # Client RPCs
-    def execute(self, json_request: str) -> "json":
-        request = json.loads(json_request)
 
-        # TODO : Implement execute
-        service = request.get("service")
-        params = request.get("params")
+    def execute_app (self, json_request):
+        request = json.loads(json_request)
+        service = request["service"]
+        params = request["params"]
 
         if service == "ping":
             result = self.app.ping()
@@ -337,5 +337,96 @@ class RaftNode:
             result = self.app.append(key,value)
         else:
             result = "Invalid service"
+        self.__print_log(f"{service}, {params}")
+        return json.dumps(result)
+
+    def execute(self, json_request: str) -> "json":
+        request = json.loads(json_request)
+        result = None
+
+        # TODO : Implement execute
+        if (self.type != RaftNode.NodeType.LEADER):
+            # error
+            result = f"This node is not leader. Please send request to {self.cluster_leader_addr.ip}:{self.cluster_leader_addr.port}"  
+        else:
+            n_node_committed = 1
+            service = request["service"]
+            params = request["params"]
+
+            # Log replication
+            new_entry = {
+                "term": self.current_term,
+                "command": {"service": service, "params": params}
+            }
+            self.log.append(new_entry)
+            
+             # Log replication: send AppendEntries RPC to all followers
+            for follower in self.cluster_addr_list:
+                if follower != self.cluster_leader_addr:
+                    prev_log_idx = len(self.log) - 2
+                    prev_log_term = self.log[prev_log_idx]["term"] if prev_log_idx >= 0 else -1
+                    append_request = {
+                        "term": self.current_term,
+                        "leader_id": self.cluster_leader_addr,
+                        "prev_log_idx": prev_log_idx,
+                        "prev_log_term": prev_log_term,
+                        "entries": [new_entry],
+                        "leader_commit": self.commit_index
+                    }
+                    result = self.send_append_entries(follower, append_request)
+                    print(result)
+
+                    if (result["success"]):
+                        n_node_committed += 1
+            
+            if (n_node_committed > (len(self.cluster_addr_list) / 2)):
+                # if majority, execute
+                self.execute_app(json_request)
+
+                # Inform follower to execute
+                for follower in self.cluster_addr_list:
+                    if follower != self.cluster_leader_addr:
+                        self.__send_request(request, "execute_app", follower)
 
         return json.dumps(result)
+    
+    def send_append_entries(self, follower, append_request):
+        response = self.__send_request(append_request, "append_entries", follower)
+        return response
+
+    def append_entries(self, json_request):
+        result = json.loads(json_request)
+        term = int(result["term"])
+        prev_log_idx = int(result["prev_log_idx"])
+        prev_log_term = int(result["prev_log_term"])
+        entries = result["entries"]
+        leader_commit = int(result["leader_commit"])
+
+        # Handle kasus log pertama, prevnya masih ga ada
+        if (term < self.current_term):
+            is_success = False
+        else:
+            # Update current term and convert to follower if necessary
+            if term > self.current_term:
+                self.current_term = term
+                self.type = RaftNode.NodeType.FOLLOWER
+
+            # Check if log contains an entry at prev_log_idx with term prev_log_term
+            if prev_log_idx >= 0 and (len(self.log) <= prev_log_idx or self.log[prev_log_idx]["term"] != prev_log_term):
+                is_success = False
+            else:
+                # Append any new entries not already in the log
+                self.log = self.log[:prev_log_idx + 1] + entries
+                is_success = True
+
+                # Update commit index
+                if leader_commit > self.commit_index:
+                    self.commit_index = min(leader_commit, len(self.log) - 1)
+
+        response = {
+            "term": self.current_term,
+            "success": is_success
+        }
+
+        return json.dumps(response)
+        
