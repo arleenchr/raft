@@ -64,7 +64,7 @@ class RaftNode:
     def reset_election_timer(self):
         if self.election_timer:
             self.election_timer.cancel()
-        timeout = random.random() + RaftNode.ELECTION_TIMEOUT_MIN
+        timeout = random.random()*3 + RaftNode.ELECTION_TIMEOUT_MIN
         self.__print_log("reset timeout: " + str(timeout))
         self.election_timer = threading.Timer(timeout,
                                                self.start_election)
@@ -73,10 +73,6 @@ class RaftNode:
     def stop_election_timer(self):
         if self.election_timer:
             self.election_timer.cancel()
-
-    def __start_election_process(self):
-        self.__print_log("Starting election process...")
-        self.start_election()
 
     def start_election(self):
         self.stop_election_timer()
@@ -98,7 +94,7 @@ class RaftNode:
         self.voted_for = self.address
 
         # Reset election timer
-        self.reset_election_timer()
+        # self.reset_election_timer()
 
         # Send Request Vote RPCs to all other servers
         num_vote = 1
@@ -115,11 +111,12 @@ class RaftNode:
         }
 
         for follower_addr in self.cluster_addr_list:
-            print(follower_addr, self.address)
+            # print(follower_addr, self.address)
             if follower_addr != self.address:
                 print("Minta suara ", follower_addr)
                 try:
                     response = json.loads(self.__send_request(request, "request_vote" , follower_addr))
+                    print(follower_addr, response)
                     if (response["vote_granted"]):
                         num_vote+=1
                 except:
@@ -155,6 +152,7 @@ class RaftNode:
             int(request["last_log_term"]) == curr_last_log_term) and (int(request["last_log_index"]) >= curr_last_log_index)))
             
         if voted_for_condition and log_condition:
+            self.reset_election_timer()
             self.voted_for = request["candidate_addr"]
             response["vote_granted"] = True
         self.__print_log(f"Grant vote {self.voted_for}")
@@ -176,9 +174,12 @@ class RaftNode:
                     self.__send_request(request, "inform_new_leader", peer_addr)
                 except Exception as e:
                     self.__print_log(f"Failed to inform {peer_addr} about new leader: {e}")
-        
-        self.heartbeat_thread = Thread(target=asyncio.run,args=[self.__leader_heartbeat()])
-        self.heartbeat_thread.start()
+                
+        try:
+            self.heartbeat_thread = Thread(target=asyncio.run, args=[self.__leader_heartbeat()])
+            self.heartbeat_thread.start()
+        except Exception as e:
+            self.__print_log(f"Failed to start heartbeat thread: {e}")
 
     
     def inform_new_member(self, json_request):
@@ -237,7 +238,7 @@ class RaftNode:
 
      # Inter-node RPCs
     def heartbeat(self, json_request: str) -> "json":
-        # TODO : Implement heartbeat
+        # DONE : Implement heartbeat
         request = json.loads(json_request)
         response = {
             "heartbeat_response": "ack",
@@ -344,7 +345,7 @@ class RaftNode:
         request = json.loads(json_request)
         result = None
 
-        # TODO : Implement execute
+        # DONE : Implement execute
         if (self.type != RaftNode.NodeType.LEADER):
             # error
             result = f"This node is not leader. Please send request to {self.cluster_leader_addr.ip}:{self.cluster_leader_addr.port}"  
@@ -360,7 +361,7 @@ class RaftNode:
             }
             self.log.append(new_entry)
             
-             # Log replication: send AppendEntries RPC to all followers
+            # Log replication: send AppendEntries RPC to all followers
             for follower in self.cluster_addr_list:
                 if follower != self.cluster_leader_addr:
                     prev_log_idx = len(self.log) - 2
@@ -381,7 +382,7 @@ class RaftNode:
             
             if (n_node_committed > (len(self.cluster_addr_list) / 2)):
                 # if majority, execute
-                self.execute_app(json_request)
+                result = self.execute_app(json_request)
 
                 # Inform follower to execute
                 for follower in self.cluster_addr_list:
@@ -412,11 +413,28 @@ class RaftNode:
                 self.type = RaftNode.NodeType.FOLLOWER
 
             # Check if log contains an entry at prev_log_idx with term prev_log_term
-            if prev_log_idx >= 0 and (len(self.log) <= prev_log_idx or self.log[prev_log_idx]["term"] != prev_log_term):
+            if len(self.log) > 0 and prev_log_idx >= 0 and (len(self.log) <= prev_log_idx or self.log[prev_log_idx]["term"] != prev_log_term):
+                print('------------------------------')
+                print("prev log idx:", prev_log_idx)
+                print("len self log", len(self.log))
+                if (len(self.log) > 0):
+                    print("self.log[prev_log_idx][\"term\"]", self.log[prev_log_idx]["term"])
+                print("prev log term", prev_log_term)
                 is_success = False
             else:
+                # Check if an existing entry conflicts with a new one (same index but different terms), 
+                for entry in entries:
+                    if (self.log[prev_log_idx]["term"] != prev_log_term):
+                        # delete the existing entry and all that follow it
+                        idx = self.log.index(entry)
+                        del self.log[idx:]
+                        prev_log_idx = len(self.log) - 2
+                        prev_log_term = self.log[prev_log_idx]["term"] if prev_log_idx >= 0 else -1
+                        print("Rollback")
+
                 # Append any new entries not already in the log
                 self.log = self.log[:prev_log_idx + 1] + entries
+                print(self.log)
                 is_success = True
 
                 # Update commit index

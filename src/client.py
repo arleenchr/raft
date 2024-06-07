@@ -3,7 +3,7 @@ import json
 
 server = xmlrpc.client.ServerProxy("http://localhost:8080")
 execute = getattr(server, "execute")
-request = {'service': 'get', 'params': 'halo'}
+request = {'service': 'get', 'params': 'haloi'}
 # request = {'service': 'ping'}
 # request = {'service': 'set', 'params': {'key': 'halo', 'value':'iya'}}
 # request = {'service': 'delete', 'params': {'key':'halo'}}
