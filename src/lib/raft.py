@@ -208,31 +208,73 @@ class RaftNode:
         return json.dumps(response)
 
 
-
     ## Heartbeat
     async def __send_heartbeat(self, peer_addr: Address):
-        # Construct the heartbeat message
+        prev_log_index = self.next_index[peer_addr] - 1
+        prev_log_term = self.log[prev_log_index][0] if prev_log_index >= 0 else -1
+
+        entries = self.log[self.next_index[peer_addr]:]
+
         message = {
             'term': self.current_term,
             'leader_id': self.address,
-            'commit_index': len(self.log)  # assuming commit_index is the length of the log
+            'prev_log_index': prev_log_index,
+            'prev_log_term': prev_log_term,
+            'entries': entries,
+            'leader_commit': len(self.log)
         }
-        self.__print_log(f"[Leader] Sending heartbeat to {peer_addr}")
+        self.__print_log(f"[Leader] Sending heartbeat to {peer_addr} with entries: {entries}")
         try:
-            response = self.__send_request(message, "heartbeat", peer_addr)
-            if response.get("heartbeat_response") == "ack":
-                self.__print_log(f"[Leader] Heartbeat acknowledged by {peer_addr}")
+            response = self.__send_request(message, "append_entries", peer_addr)
+            if response.get("success"):
+                self.next_index[peer_addr] = len(self.log)
+                self.match_index[peer_addr] = len(self.log) - 1
+                self.__print_log(f"[Leader] AppendEntries successful for {peer_addr}")
+            else:
+                self.next_index[peer_addr] -= 1
+                self.__print_log(f"[Leader] AppendEntries failed for {peer_addr}, decreasing next_index")
         except Exception as e:
             self.__print_log(f"[Leader] Failed to send heartbeat to {peer_addr}: {e}")
 
+
     async def __leader_heartbeat(self):
-        # DONE : Send periodic heartbeat
         while self.type == RaftNode.NodeType.LEADER:
             self.__print_log("[Leader] Sending heartbeat...")
             send_tasks = [self.__send_heartbeat(peer_addr) for peer_addr in self.cluster_addr_list if peer_addr != self.address]
             await asyncio.gather(*send_tasks)
-            # pass
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
+
+            
+    # Append log to the leader node
+    def append_entries(self, json_request: str) -> "json":
+        request = json.loads(json_request)
+        response = {
+            "term": self.current_term,
+            "success": False
+        }
+
+        if request["term"] < self.current_term:
+            return json.dumps(response)
+
+        self.current_term = request["term"]
+        self.cluster_leader_addr = request["leader_id"]
+        self.type = RaftNode.NodeType.FOLLOWER
+        self.reset_election_timer()
+
+        prev_log_index = request["prev_log_index"]
+        prev_log_term = request["prev_log_term"]
+
+        if prev_log_index >= 0 and (len(self.log) <= prev_log_index or self.log[prev_log_index][0] != prev_log_term):
+            return json.dumps(response)
+
+        for i, entry in enumerate(request["entries"]):
+            if len(self.log) > prev_log_index + 1 + i:
+                self.log[prev_log_index + 1 + i] = entry
+            else:
+                self.log.append(entry)
+
+        response["success"] = True
+        return json.dumps(response)
 
      # Inter-node RPCs
     def heartbeat(self, json_request: str) -> "json":
@@ -251,6 +293,9 @@ class RaftNode:
             self.reset_election_timer()  # Reset the timer on receiving a heartbeat
 
         return json.dumps(response)
+    
+    
+    
     
     ## Membership
     def __try_to_apply_membership(self, contact_addr: Address):
@@ -312,8 +357,6 @@ class RaftNode:
     # Client RPCs
     def execute(self, json_request: str) -> "json":
         request = json.loads(json_request)
-
-        # TODO : Implement execute
         service = request.get("service")
         params = request.get("params")
 
@@ -334,8 +377,15 @@ class RaftNode:
         elif service == "append":
             key = params.get("key")
             value = params.get("value")
-            result = self.app.append(key,value)
+            result = self.app.append(key, value)
         else:
             result = "Invalid service"
 
+        self.log.append((self.current_term, json_request))
+        if self.type == RaftNode.NodeType.LEADER:
+            self.__replicate_log_entries()
+
         return json.dumps(result)
+
+def __replicate_log_entries(self):
+    asyncio.run(self.__leader_heartbeat())
