@@ -1,8 +1,10 @@
-
 const parameterInputs = document.getElementById('parameterInputs');
 const sendRequestButton = document.getElementById('sendRequestButton');
+const responseOutput = document.getElementById("response");
 let currentService = '';
 let currentServer = '';
+let backendUrl = "http://localhost:5000/api/service";
+let keyInput, valueInput;
 
 const updateParameters = (service) => {
     currentService = service;
@@ -14,13 +16,13 @@ const updateParameters = (service) => {
         case 'get':
         case 'strln':
         case 'del':
-        html = '<input type="text" class="form-control" placeholder="Key">';
+        html = '<input type="text" class="form-control" placeholder="Key" id="keyInput">';
         break;
         case 'set':
         case 'append':
         html = `
-            <input type="text" class="form-control" placeholder="Key">
-            <input type="text" class="form-control" placeholder="Value">
+            <input type="text" class="form-control" placeholder="Key" id="keyInput">
+            <input type="text" class="form-control" placeholder="Value" id="valueInput">
         `;
         break;
         default:
@@ -44,8 +46,143 @@ const validateForm = () => {
     console.log(currentService, currentServer);
 }
 
-sendRequestButton.addEventListener('click', () => {
+sendRequestButton.addEventListener('click', async() => {
     console.log("Sending request", currentService, "to", currentServer);
+    switch (currentService){
+        case "ping":
+            try {
+                const response = await fetch(backendUrl, {
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({'service': 'ping', 'params': ''})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+    
+                const data = await response.json();
+                console.log("API response:", data);
+                responseOutput.innerHTML = "Response: " + JSON.stringify(data);
+            } catch (error) {
+                console.error("Error sending request:", error);
+            }
+            break;
+        case "get":
+            keyInput = document.getElementById("keyInput").value;
+            try {
+                const response = await fetch(backendUrl, {
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({'service': 'get', 'params': keyInput})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+    
+                const data = await response.json();
+                console.log("API response:", data);
+                responseOutput.innerHTML = "Response: " + JSON.stringify(data);
+            } catch (error) {
+                console.error("Error sending request:", error);
+            }
+            break;
+        case "set":
+            keyInput = document.getElementById("keyInput").value;
+            valueInput = document.getElementById("valueInput").value;
+            try {
+                const response = await fetch(backendUrl, {
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({'service': 'set', 'params': {'key': keyInput, 'value':valueInput}})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+    
+                const data = await response.json();
+                console.log("API response:", data);
+                responseOutput.innerHTML = "Response: " + JSON.stringify(data);
+            } catch (error) {
+                console.error("Error sending request:", error);
+            }
+            break;
+        case "strln":
+            keyInput = document.getElementById("keyInput").value;
+            try {
+                const response = await fetch(backendUrl, {
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({'service': 'strln', 'params': {'key': keyInput}})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+    
+                const data = await response.json();
+                console.log("API response:", data);
+                responseOutput.innerHTML = "Response: " + JSON.stringify(data);
+            } catch (error) {
+                console.error("Error sending request:", error);
+            }
+            break;
+        case "del":
+            keyInput = document.getElementById("keyInput").value;
+            try {
+                const response = await fetch(backendUrl, {
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({'service': 'delete', 'params': {'key': keyInput}})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+    
+                const data = await response.json();
+                console.log("API response:", data);
+                responseOutput.innerHTML = "Response: " + JSON.stringify(data);
+            } catch (error) {
+                console.error("Error sending request:", error);
+            }
+            break;
+        case "append":
+            keyInput = document.getElementById("keyInput").value;
+            valueInput = document.getElementById("valueInput").value;
+            try {
+                const response = await fetch(backendUrl, {
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({'service': 'append', 'params': {'key': keyInput, 'value':valueInput}})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+    
+                const data = await response.json();
+                console.log("API response:", data);
+                responseOutput.innerHTML = "Response: " + JSON.stringify(data);
+            } catch (error) {
+                console.error("Error sending request:", error);
+            }
+            break;
+    }
 });
 
 document.querySelectorAll('#dropdownServiceButton + .dropdown-menu .dropdown-item').forEach(item => {

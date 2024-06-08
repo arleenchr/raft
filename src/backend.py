@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import xmlrpc.client
 import json
 
 app = Flask(__name__)
+CORS(app)
 
 server = xmlrpc.client.ServerProxy("http://localhost:8080")
 execute = getattr(server, "execute")
