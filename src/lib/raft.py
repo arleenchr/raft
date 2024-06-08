@@ -77,13 +77,12 @@ class RaftNode:
     def start_election(self):
         self.stop_election_timer()
 
-        leader_request_thread = threading.Thread(target=self.__leader_request_vote, name="t1")
+        leader_request_thread = threading.Thread(target= self.run_async_task, args=[self.__leader_request_vote()], name="t1")
         leader_request_thread.start()
-        leader_request_thread.join()
 
     # Request vote to be a leader as node become a candidate node. Internode RPC
 
-    def __leader_request_vote(self):
+    async def __leader_request_vote(self):
         self.__print_log("[CANDIDATE] start to request vote")
         self.type = RaftNode.NodeType.CANDIDATE
 
@@ -94,11 +93,12 @@ class RaftNode:
         self.voted_for = self.address
 
         # Reset election timer
-        # self.reset_election_timer()
+        self.reset_election_timer()
 
         # Send Request Vote RPCs to all other servers
-        num_vote = 1
-        abstain_node = 0
+        self.num_vote = 1
+        self.abstain_node = 0
+        self.lock = threading.Lock()
 
         last_log_index = -1 if (len(self.log)==0) else len(self.log)-1
         last_log_term = -1 if (len(self.log)==0) else int(self.log[len(self.log)-1]["term"])
@@ -109,32 +109,40 @@ class RaftNode:
             "last_log_index":   last_log_index,
             "last_log_term":    last_log_term,
         }
+        list_thread = []
 
         for follower_addr in self.cluster_addr_list:
             # print(follower_addr, self.address)
             if follower_addr != self.address:
-                print("Minta suara ", follower_addr)
-                try:
-                    response = json.loads(self.__send_request(request, "request_vote" , follower_addr))
-                    print(follower_addr, response)
-                    if (response["vote_granted"]):
-                        num_vote+=1
-                except:
-                    print("Timeout", follower_addr)
-                    abstain_node += 1
-                    pass
+                thread = threading.Thread(target=self.__send_request_vote, kwargs={"follower_addr": follower_addr, "request": request})
+                thread.start()
+                list_thread.append(thread)
         
-        if (num_vote > ((len(self.cluster_addr_list) - abstain_node)/2)):
-            print("num vote: ", num_vote)
-            print("quorum: ", ((len(self.cluster_addr_list) - abstain_node)/2) )
+        await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL * 2)
+        self.__print_log("num vote: "+ str(self.num_vote))
+        self.__print_log("quorum: "+ str((len(self.cluster_addr_list) - self.abstain_node)/2) )
+        if (self.num_vote > ((len(self.cluster_addr_list) - self.abstain_node)/2)):
             self.__initialize_as_leader()
         else:
             self.type = RaftNode.NodeType.FOLLOWER
 
+    def __send_request_vote(self, follower_addr, request):
+        self.__print_log("Minta suara " + str(follower_addr))
+        try:
+            response = json.loads(self.__send_request(request, "request_vote" , follower_addr))
+            print(follower_addr, response)
+            if (response["vote_granted"]):
+                self.lock.acquire()
+                self.num_vote+=1
+                self.lock.release()
+
+        except:
+            self.__print_log("Timeout" + str(follower_addr))
+
         
     def request_vote(self, json_request: str):
 
-        print("KEPANGGIL VOTE")
+        self.__print_log("KEPANGGIL VOTE")
         request = json.loads(json_request)
         response = {
             "term": self.current_term,
