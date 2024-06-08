@@ -217,7 +217,7 @@ class RaftNode:
 
 
     ## Heartbeat
-    async def __send_heartbeat(self, peer_addr: Address):
+    def __send_heartbeat(self, peer_addr: Address):
         # Construct the heartbeat message
         message = {
             'term': self.current_term,
@@ -234,12 +234,19 @@ class RaftNode:
 
     async def __leader_heartbeat(self):
         # DONE : Send periodic heartbeat
+        list_thread = []
         while self.type == RaftNode.NodeType.LEADER:
             self.__print_log("[Leader] Sending heartbeat...")
-            send_tasks = [self.__send_heartbeat(peer_addr) for peer_addr in self.cluster_addr_list if peer_addr != self.address]
-            await asyncio.gather(*send_tasks)
+            for peer_addr in self.cluster_addr_list:
+                if (peer_addr != self.address):
+                    thread = threading.Thread(target=self.__send_heartbeat, kwargs={'peer_addr' : peer_addr}, name=str(peer_addr.port))
+                    thread.start()
+                    list_thread.append(thread)
+            # send_tasks = [self.__send_heartbeat(peer_addr) for peer_addr in self.cluster_addr_list if peer_addr != self.address]
+            # await asyncio.gather(*send_tasks)
             # pass
             await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL)
+            list_thread = []
 
      # Inter-node RPCs
     def heartbeat(self, json_request: str) -> "json":
