@@ -429,7 +429,7 @@ class RaftNode:
             else:
                 # Check if an existing entry conflicts with a new one (same index but different terms), 
                 for entry in entries:
-                    if (self.log[prev_log_idx]["term"] != prev_log_term):
+                    if (prev_log_idx>=0) and (self.log[prev_log_idx]["term"] != prev_log_term):
                         # delete the existing entry and all that follow it
                         idx = self.log.index(entry)
                         del self.log[idx:]
