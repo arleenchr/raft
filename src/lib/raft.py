@@ -401,7 +401,15 @@ class RaftNode:
                     if follower != self.cluster_leader_addr:
                         self.__send_request(request, "execute_app", follower)
 
-        return json.dumps(result)
+        return result
+    
+    def request_log(self,json_request: str):
+        result = ""
+        for log in self.log:
+            result += f"Term: {log['term']}, Command:\n\tService: {log['command']['service']}, Parameter:"
+            for a in log['command']['params']:
+                result += f"\n\t\t{a.capitalize()}: {log['command']['params'][a]}"
+        return result
     
     def send_append_entries(self, follower, append_request):
         response = self.__send_request(append_request, "append_entries", follower)
