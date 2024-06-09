@@ -41,7 +41,6 @@ class RaftNode:
         if contact_addr is None:
             self.cluster_addr_list.append(self.address)
             self.__initialize_as_leader()
-            # self.__start_election_process()
         else:
             self.__try_to_apply_membership(contact_addr)
             self.reset_election_timer()
@@ -52,20 +51,10 @@ class RaftNode:
 
     def __send_request(self, request: Any, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
-        # self.__print_log(request)
         node = ServerProxy(f"http://{addr.ip}:{addr.port}", allow_none=True)
         json_request = json.dumps(request)
         rpc_function = getattr(node, rpc_name)
-        start_time = time.time()
-        try:
-            response = json.loads(rpc_function(json_request))
-            end_time = time.time()
-            # self.__print_log(f"RPC call {rpc_name} to {addr} took {end_time - start_time:.2f} seconds")
-            return response
-        except Exception as e:
-            end_time = time.time()
-            # self.__print_log(f"RPC call {rpc_name} to {addr} failed after {end_time - start_time:.2f} seconds with error: {e}")
-            raise
+        return json.loads(rpc_function(json_request))
 
     ## Leadership
 
@@ -107,7 +96,6 @@ class RaftNode:
 
         # Send Request Vote RPCs to all other servers
         self.num_vote = 1
-        self.abstain_node = 0
         self.lock = threading.Lock()
 
         last_log_index = -1 if (len(self.log)==0) else len(self.log)-1
@@ -130,8 +118,8 @@ class RaftNode:
         
         await asyncio.sleep(RaftNode.HEARTBEAT_INTERVAL * 2)
         self.__print_log("num vote: "+ str(self.num_vote))
-        self.__print_log("quorum: "+ str((len(self.cluster_addr_list) - self.abstain_node)/2) )
-        if (self.num_vote > ((len(self.cluster_addr_list) - self.abstain_node)/2)):
+        self.__print_log("quorum: "+ str(len(self.cluster_addr_list) /2) )
+        if (self.num_vote > (len(self.cluster_addr_list)/2)):
             self.__initialize_as_leader()
         else:
             self.type = RaftNode.NodeType.FOLLOWER
@@ -147,9 +135,7 @@ class RaftNode:
                 self.lock.release()
 
         except Exception as e:
-            
             self.__print_log("Timeout" + str(follower_addr) + " with error:" + str(e))
-            self.abstain_node += 1
 
         
     def request_vote(self, json_request: str):
@@ -180,9 +166,16 @@ class RaftNode:
         return json.dumps(response)
 
     def run_async_task(self, coro):
-        loop = asyncio.new_event_loop()
+        loop = asyncio.SelectorEventLoop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(coro)
+
+
+    def __send_new_leader_information(self, request, peer_addr):
+        try:
+            self.__send_request(request, "inform_new_leader", peer_addr)
+        except Exception as e:
+            self.__print_log(f"Failed to inform {peer_addr} about new leader: {e}")
 
     # Initialize as leader, if candidate get majority vote from other node
     def __initialize_as_leader(self):
@@ -197,11 +190,8 @@ class RaftNode:
         # TODO : Inform to all node this is new leader
         for peer_addr in self.cluster_addr_list:
             if peer_addr != self.address:
-                try:
-                    self.__send_request(request, "inform_new_leader", peer_addr)
-                except Exception as e:
-                    self.__print_log(f"Failed to inform {peer_addr} about new leader: {e}")
-                
+                t = Thread(target=self.__send_new_leader_information, kwargs={"request":request, "peer_addr":peer_addr})
+                t.start()
         try:
             self.heartbeat_thread = Thread(target=self.run_async_task, args=[self.__leader_heartbeat()])
             self.heartbeat_thread.start()
@@ -385,7 +375,6 @@ class RaftNode:
             result = f"This node is not leader. Please send request to {self.cluster_leader_addr.ip}:{self.cluster_leader_addr.port}"  
         else:
             n_node_committed = 1
-            abstain = 0
             service = request["service"]
             params = request["params"]
 
@@ -417,9 +406,8 @@ class RaftNode:
                             n_node_committed += 1
                 except Exception as e:
                     self.__print_log(f"[Leader] Failed to execute {follower}: {e}")
-                    abstain += 1
             
-            if (n_node_committed > ((len(self.cluster_addr_list)-abstain) / 2)):
+            if (n_node_committed > (len(self.cluster_addr_list) / 2)):
                 # if majority, execute
                 result = self.execute_app(json_request)
 
