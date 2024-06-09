@@ -6,13 +6,13 @@ Tugas Besar ini adalah implementasi dari algoritma Raft untuk konsensus terdistr
 
 ## Implementasi Raft
 
-Raft adalah protokol konsensus yang digunakan untuk mengelola replika log dalam sistem terdistribusi. Implementasi ini mencakup empat komponen utama: 
+Raft adalah protokol konsensus yang digunakan untuk mengelola replika log dalam sistem terdistribusi. Implementasi ini mencakup empat komponen utama:
 
 ### a. Membership Change
 
 Membership Change dalam cluster Raft melibatkan penambahan atau penghapusan node dari cluster. Berikut adalah langkah-langkah yang diambil dalam implementasi ini:
 
-1. Node yang ingin bergabung akan menghubungi node lain di dalam cluster menggunakan alamat kontak yang disediakan. Node tersebut akan mencoba untuk bergabung dengan cluster dengan mengirim request membership (`apply_membership`).
+1. Node yang ingin bergabung akan menghubungi node lain di dalam cluster menggunakan alamat kontak yang disediakan. Node tersebut akan mencoba untuk bergabung dengan cluster dengan mengirim request membership (`__try_to_apply_membership`).
 
 2. Jika node yang menerima request adalah leader, maka leader tersebut akan menambahkan node baru ke dalam daftar alamat cluster (`cluster_addr_list`) dan mengirimkan informasi membership baru kepada semua node dalam cluster (`__send_new_member_information`).
 
@@ -57,13 +57,12 @@ Leader Election terjadi ketika follower tidak menerima heartbeat dalam waktu yan
 ## Fitur Tambahan
 
 ### a. Unit Test
+
 Unit test digunakan untuk memastikan bahwa setiap komponen program bekerja dengan benar. Test ini mencakup berbagai fungsi dan modul dalam proyek, dan diimplementasikan menggunakan library unittest. Unit test membantu mendeteksi dan memperbaiki bug sebelum kode di-deploy.
 
 ### b. Web Client
-Web client menyediakan interface pengguna yang intuitif untuk berinteraksi dengan sistem Raft. Pengguna dapat mengirim perintah, melihat status cluster, dan memantau log entri melalui halaman web. Web client ini dibangun menggunakan HTML dan JavaScript.
 
-### c. Dashboard
-Dashboard adalah fitur yang menyediakan visualisasi status cluster, termasuk leader saat ini, follower, dan log entri. Dashboard membantu dalam memantau dan mendiagnosis masalah dalam sistem dengan mudah. 
+Web client menyediakan interface pengguna yang intuitif untuk berinteraksi dengan sistem Raft. Pengguna dapat mengirim perintah, melihat status cluster, dan memantau log entri melalui halaman web. Web client ini dibangun menggunakan HTML dan JavaScript.
 
 ## Cara Menjalankan Program
 
@@ -71,14 +70,20 @@ Dashboard adalah fitur yang menyediakan visualisasi status cluster, termasuk lea
 
 Untuk menjalankan server, ikuti langkah-langkah berikut:
 
-1. Pindah ke direktori `src`.
+1. Pastikan berada di root direktory repo `if3230-tubes-kraft`.
 2. Install dependencies dengan menjalankan:
    ```bash
    pip install -r requirements.txt
    ```
-3. Jalankan server dengan perintah:
+3. Jalankan leader server dengan perintah:
    ```bash
-   python server.py
+   python src/server.py [ip] [port]
+   ex: python src/server.py localhost 8080
+   ```
+4. Jalankan follower server dengan perintah:
+   ```bash
+   python src/server.py [ip] [port] [leader_ip] [leader_port]
+   ex: python src/server.py localhost 8050 localhost 8080
    ```
 
 ### b. Client
@@ -90,11 +95,10 @@ Untuk menjalankan client, ikuti langkah-langkah berikut:
 
 ## Identitas
 
-
-| Nama                              | NIM         |
-|-----------------------------------|-------------|
-| Kevin John Wesley Hutabarat       | 13521042    |
-| Manuella Ivana Uli Sianipar       | 13521051    |
-| Arleen Chrysantha Gunardi         | 13521059    |
-| Muhammad Fadhil Amri              | 13521066    |
-| Yobel Dean Christopher            | 13521067    |
+| Nama                        | NIM      |
+| --------------------------- | -------- |
+| Kevin John Wesley Hutabarat | 13521042 |
+| Manuella Ivana Uli Sianipar | 13521051 |
+| Arleen Chrysantha Gunardi   | 13521059 |
+| Muhammad Fadhil Amri        | 13521066 |
+| Yobel Dean Christopher      | 13521067 |
