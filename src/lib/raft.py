@@ -170,9 +170,28 @@ class RaftNode:
         return json.dumps(response)
 
     def run_async_task(self, coro):
-        loop = asyncio.SelectorEventLoop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(coro)
+        def wrapper():
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If the loop is already running, create a new task within this loop
+                    loop.create_task(coro)
+                else:
+                    # Run the coro coroutine in the event loop
+                    loop.run_until_complete(coro)
+            except Exception as e:
+                # Handle exceptions that occur during event loop creation or running
+                loop = asyncio.SelectorEventLoop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(coro)
+                # print(f"Exception in async task: {e}")
+            finally:
+                # Don't close the loop if it was already running
+                if not loop.is_running():
+                    loop.close()
+         # Start the thread to run the async task
+        thread = threading.Thread(target=wrapper)
+        thread.start()
 
 
     def __send_new_leader_information(self, request, peer_addr):
