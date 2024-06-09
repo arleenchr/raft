@@ -327,15 +327,14 @@ class RaftNode:
         if (self.type == RaftNode.NodeType.LEADER):
             address = json.loads(address)
             address = Address(address["ip"], address["port"])
-            self.cluster_addr_list.append(address)
-            self.__print_log(f"Adding {address} to cluster...")
+            if (not(address in self.cluster_addr_list)):
+                self.cluster_addr_list.append(address)
+                self.__print_log(f"Adding {address} to cluster...")
+                new_member_broadcaster_thread = threading.Thread(target=self.__send_new_member_information, kwargs={'address' : address}, name="t2")
+                new_member_broadcaster_thread.start()
             response["status"] = "success"
             response["log"] = self.log
             response["cluster_addr_list"] = self.cluster_addr_list
-            # Redirected 
-        
-            new_member_broadcaster_thread = threading.Thread(target=self.__send_new_member_information, kwargs={'address' : address}, name="t2")
-            new_member_broadcaster_thread.start()
         return json.dumps(response)
 
     # Client RPCs
