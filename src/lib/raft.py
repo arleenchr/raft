@@ -51,7 +51,7 @@ class RaftNode:
 
     def __send_request(self, request: Any, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
-        self.__print_log(request)
+        # self.__print_log(request)
         node = ServerProxy(f"http://{addr.ip}:{addr.port}", allow_none=True)
         json_request = json.dumps(request)
         rpc_function = getattr(node, rpc_name)
