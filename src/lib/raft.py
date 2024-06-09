@@ -149,6 +149,7 @@ class RaftNode:
         except Exception as e:
             
             self.__print_log("Timeout" + str(follower_addr) + " with error:" + str(e))
+            self.abstain_node += 1
 
         
     def request_vote(self, json_request: str):
