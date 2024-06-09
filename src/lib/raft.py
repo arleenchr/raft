@@ -18,7 +18,7 @@ from lib.struct.address       import Address
 class RaftNode:
     HEARTBEAT_INTERVAL   = 1
     ELECTION_TIMEOUT_MIN = 2
-    ELECTION_TIMEOUT_MAX = 5
+    ELECTION_TIMEOUT_MAX = 6
     RPC_TIMEOUT          = 0.5
 
     class NodeType(Enum):
@@ -51,6 +51,7 @@ class RaftNode:
 
     def __send_request(self, request: Any, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
+        self.__print_log(request)
         node = ServerProxy(f"http://{addr.ip}:{addr.port}", allow_none=True)
         json_request = json.dumps(request)
         rpc_function = getattr(node, rpc_name)
@@ -98,8 +99,8 @@ class RaftNode:
         self.num_vote = 1
         self.lock = threading.Lock()
 
-        last_log_index = -1 if (len(self.log)==0) else len(self.log)-1
-        last_log_term = -1 if (len(self.log)==0) else int(self.log[len(self.log)-1]["term"])
+        last_log_index = -1 if (len(self.log)<=0) else len(self.log)-1
+        last_log_term = -1 if (len(self.log)<=0) else int(self.log[len(self.log)-1]["term"])
 
         request = {
             "term":             self.current_term,
@@ -140,7 +141,7 @@ class RaftNode:
         
     def request_vote(self, json_request: str):
 
-        self.__print_log("KEPANGGIL VOTE")
+        self.__print_log("ASK TO VOTE")
         request = json.loads(json_request)
         response = {
             "term": self.current_term,
@@ -153,11 +154,14 @@ class RaftNode:
         
         voted_for_condition = self.voted_for is None or self.voted_for == candidate_addr
         
+
         curr_last_log_index = -1 if (len(self.log)==0) else len(self.log)-1
-        curr_last_log_term = -1 if (len(self.log)==0) else self.log[len(self.log)-1][0]
+        curr_last_log_term = -1 if (len(self.log)==0) else self.log[len(self.log)-1]["term"]
+        self.__print_log("MASUK LINE REQUEST VOTE 160")
         log_condition = ((int(request["last_log_term"]) > curr_last_log_term) or ((
             int(request["last_log_term"]) == curr_last_log_term) and (int(request["last_log_index"]) >= curr_last_log_index)))
             
+        self.__print_log("MASUK LINE REQUEST VOTE 164")
         if voted_for_condition and log_condition:
             self.reset_election_timer()
             self.voted_for = candidate_addr
@@ -329,8 +333,7 @@ class RaftNode:
             response["log"] = self.log
             response["cluster_addr_list"] = self.cluster_addr_list
             # Redirected 
-            print("sini")
-            
+        
             new_member_broadcaster_thread = threading.Thread(target=self.__send_new_member_information, kwargs={'address' : address}, name="t2")
             new_member_broadcaster_thread.start()
         return json.dumps(response)
@@ -400,7 +403,6 @@ class RaftNode:
                             "leader_commit": self.commit_index
                         }
                         result = self.send_append_entries(follower, append_request)
-                        print(result)
 
                         if (result["success"]):
                             n_node_committed += 1
