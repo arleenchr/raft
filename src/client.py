@@ -1,11 +1,11 @@
 import xmlrpc.client
 import json
 
-server = xmlrpc.client.ServerProxy("http://localhost:8080")
+server = xmlrpc.client.ServerProxy("http://localhost:8070")
 
-# request = {'service': 'get', 'params': 'haloi'}
-# request = {'service': 'ping'}
-# request = {'service': 'set', 'params': {'key': 'halo', 'value':'iya'}}
+# request = {'service': 'get', 'params': 'hali'}
+# request = {'service': 'ping', 'params': ''}
+# request = {'service': 'set', 'params': {'key': 'hal0', 'value':'iyi'}}
 # request = {'service': 'delete', 'params': {'key':'halo'}}
 # request = {'service': 'append', 'params': {'key': 'halo', 'value':'iya'}}
 # request = {'service': 'strln', 'params': {'key': 'halo'}}

@@ -53,7 +53,7 @@ class RaftNode:
     def __send_request(self, request: Any, rpc_name: str, addr: Address) -> "json":
         # Warning : This method is blocking
         # self.__print_log(request)
-        node = ServerProxy(f"http://{addr.ip}:{addr.port}")
+        node = ServerProxy(f"http://{addr.ip}:{addr.port}", allow_none=True)
         json_request = json.dumps(request)
         rpc_function = getattr(node, rpc_name)
         start_time = time.time()
@@ -385,6 +385,7 @@ class RaftNode:
             result = f"This node is not leader. Please send request to {self.cluster_leader_addr.ip}:{self.cluster_leader_addr.port}"  
         else:
             n_node_committed = 1
+            abstain = 0
             service = request["service"]
             params = request["params"]
 
@@ -397,38 +398,47 @@ class RaftNode:
             
             # Log replication: send AppendEntries RPC to all followers
             for follower in self.cluster_addr_list:
-                if follower != self.cluster_leader_addr:
-                    prev_log_idx = len(self.log) - 2
-                    prev_log_term = self.log[prev_log_idx]["term"] if prev_log_idx >= 0 else -1
-                    append_request = {
-                        "term": self.current_term,
-                        "leader_id": self.cluster_leader_addr,
-                        "prev_log_idx": prev_log_idx,
-                        "prev_log_term": prev_log_term,
-                        "entries": [new_entry],
-                        "leader_commit": self.commit_index
-                    }
-                    result = self.send_append_entries(follower, append_request)
-                    print(result)
+                try:
+                    if follower != self.cluster_leader_addr:
+                        prev_log_idx = len(self.log) - 2
+                        prev_log_term = self.log[prev_log_idx]["term"] if prev_log_idx >= 0 else -1
+                        append_request = {
+                            "term": self.current_term,
+                            "leader_id": self.cluster_leader_addr,
+                            "prev_log_idx": prev_log_idx,
+                            "prev_log_term": prev_log_term,
+                            "entries": [new_entry],
+                            "leader_commit": self.commit_index
+                        }
+                        result = self.send_append_entries(follower, append_request)
+                        print(result)
 
-                    if (result["success"]):
-                        n_node_committed += 1
+                        if (result["success"]):
+                            n_node_committed += 1
+                except Exception as e:
+                    self.__print_log(f"[Leader] Failed to execute {follower}: {e}")
+                    abstain += 1
             
-            if (n_node_committed > (len(self.cluster_addr_list) / 2)):
+            if (n_node_committed > ((len(self.cluster_addr_list)-abstain) / 2)):
                 # if majority, execute
                 result = self.execute_app(json_request)
 
                 # Inform follower to execute
                 for follower in self.cluster_addr_list:
                     if follower != self.cluster_leader_addr:
-                        self.__send_request(request, "execute_app", follower)
+                        try:
+                            self.__send_request(request, "execute_app", follower)
+                        except Exception as e:
+                            self.__print_log(f"[Leader] Failed to execute {follower}: {e}")
+            else:
+                result = self.execute_app(json_request)
 
         return result
     
     def request_log(self,json_request: str):
         result = ""
         for log in self.log:
-            result += f"Term: {log['term']}, Command:\n\tService: {log['command']['service']}, Parameter:"
+            result += f"\nTerm: {log['term']}, Command:\n\tService: {log['command']['service']}, Parameter:"
             for a in log['command']['params']:
                 result += f"\n\t\t{a.capitalize()}: {log['command']['params'][a]}"
         return result
