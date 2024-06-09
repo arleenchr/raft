@@ -22,7 +22,7 @@ Membership Change dalam cluster Raft melibatkan penambahan atau penghapusan node
 
 ### b. Log Replication
 
-Replikasi log adalah proses di mana leader memastikan bahwa semua entri log diterapkan pada semua node dalam cluster. Berikut adalah langkah-langkah dalam proses ini:
+Log Replication adalah proses di mana leader memastikan bahwa semua entri log diterapkan pada semua node dalam cluster. Berikut adalah langkah-langkah dalam proses ini:
 
 1. Ketika leader menerima request dari klien, request tersebut dicatat dalam log leader.
 
@@ -44,7 +44,7 @@ Heartbeat adalah sinyal periodik yang dikirim oleh leader ke semua follower untu
 
 ### d. Leader Election
 
-Pemilihan leader terjadi ketika follower tidak menerima heartbeat dalam waktu yang ditentukan, atau ketika follower menerima term yang lebih tinggi dari leader saat ini. Berikut adalah langkah-langkah dalam pemilihan leader:
+Leader Election terjadi ketika follower tidak menerima heartbeat dalam waktu yang ditentukan, atau ketika follower menerima term yang lebih tinggi dari leader saat ini. Berikut adalah langkah-langkah dalam pemilihan leader:
 
 1. Ketika timer pemilihan habis, follower akan mengubah status menjadi kandidat dan memulai pemilihan baru dengan meningkatkan term saat ini dan memberikan suara untuk dirinya sendiri (`start_election`).
 
@@ -86,7 +86,7 @@ Untuk menjalankan server, ikuti langkah-langkah berikut:
 Untuk menjalankan client, ikuti langkah-langkah berikut:
 
 1. Pastikan server sudah berjalan.
-2. Buka file `index.html` di browser Anda untuk mengakses antarmuka web client.
+2. Buka file `index.html` di browser untuk mengakses antarmuka web client.
 
 ## Identitas
 
