@@ -439,8 +439,11 @@ class RaftNode:
         result = ""
         for log in self.log:
             result += f"\nTerm: {log['term']}, Command:\n\tService: {log['command']['service']}, Parameter:"
-            for a in log['command']['params']:
-                result += f"\n\t\t{a.capitalize()}: {log['command']['params'][a]}"
+            if (isinstance(log['command']['params'], dict)):
+                for a in log['command']['params']:
+                    result += f"\n\t\t{a.capitalize()}: {log['command']['params'][a]}"
+            else:
+                result += f"\n\t\t{log['command']['params']}"
         return result
     
     def send_append_entries(self, follower, append_request):
